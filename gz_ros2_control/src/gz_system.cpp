@@ -85,6 +85,9 @@ struct jointData
   /// \brief Current cmd joint velocity
   double joint_velocity_cmd;
 
+  /// \brief Simulated error in the joint position
+  double joint_position_reading_error;
+
   /// \brief Current cmd joint effort
   double joint_effort_cmd;
 
@@ -370,6 +373,23 @@ bool GazeboSimSystem::initSim(
       }
     }
 
+    if (joint_info.parameters.find("joint_position_reading_error") != joint_info.parameters.end()) {
+      const auto joint_position_reading_error = joint_info.parameters.at("joint_position_reading_error");
+      try {
+        this->dataPtr->joints_[j].joint_position_reading_error = std::stod(joint_position_reading_error);
+      } catch (std::invalid_argument &) {
+        RCLCPP_ERROR_STREAM(
+          this->nh_->get_logger(),
+          "Failed converting joint_position_reading_error string to real number for the joint "
+            << joint_name
+            << ". Actual value of parameter: " << joint_position_reading_error
+            << ". Joint position reading error will be set to 0.0");
+        this->dataPtr->joints_[j].joint_position_reading_error = 0.0;
+      }
+    }
+    RCLCPP_INFO_STREAM(this->nh_->get_logger(), "\t\t joint_position_reading_error: " <<
+      this->dataPtr->joints_[j].joint_position_reading_error);
+
     RCLCPP_INFO_STREAM(this->nh_->get_logger(), "\tCommand:");
 
     // register the command handles
@@ -559,7 +579,7 @@ hardware_interface::return_type GazeboSimSystem::read(
       this->dataPtr->ecm->Component<sim::components::JointPosition>(
       this->dataPtr->joints_[i].sim_joint);
 
-    this->dataPtr->joints_[i].joint_position = jointPositions->Data()[0];
+    this->dataPtr->joints_[i].joint_position = jointPositions->Data()[0] + this->dataPtr->joints_[i].joint_position_reading_error;
     this->dataPtr->joints_[i].joint_velocity = jointVelocity->Data()[0];
     // this->dataPtr->joint_effort_[j] = jointForce->Data()[0];
   }
